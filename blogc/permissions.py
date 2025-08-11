@@ -1,22 +1,18 @@
 from rest_framework import permissions
 
-class IsAdminGroup(permissions.BasePermission):
+class IsBlogAdmin(permissions.BasePermission):
     """
-    Allow access only to users in the ADMIN group.
+    Allows access only to users who are blog admins (profile.is_blog_admin True).
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.groups.filter(name='ADMIN').exists()
+        return bool(request.user and getattr(request.user, 'profile', None) and request.user.profile.is_blog_admin)
 
-class IsAuthorOrAdmin(permissions.BasePermission):
+class IsAuthorOrReadOnly(permissions.BasePermission):
     """
-    Object-level permission to only allow authors of an object or admins to edit/delete it.
+    Object-level permission to only allow authors to edit/delete their own posts.
     """
     def has_object_permission(self, request, view, obj):
-        # Read permissions are allowed to any authenticated user (we'll limit listing elsewhere).
+        # Read permissions are allowed to authenticated users (IsAuthenticated enforced globally)
         if request.method in permissions.SAFE_METHODS:
-            return True
-        if not request.user or not request.user.is_authenticated:
-            return False
-        if request.user.groups.filter(name='ADMIN').exists():
             return True
         return obj.author == request.user

@@ -1,30 +1,34 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
-    CategoryListCreateView, CategoryDetailView,
-    PostListView, PostDetailView, AdminPostListCreateView, PostUpdateDestroyView,
-    CommentCreateView, CommentListView, CommentDeleteView,
-    LikeCreateDestroyView, LatestPostsView
+    RegisterView, PostViewSet, CategoryListView, CategoryDetailView,
+    CommentCreateView, CommentListView, ToggleLikeView
+)
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
 )
 
+router = DefaultRouter()
+router.register(r'posts', PostViewSet, basename='post')
+
 urlpatterns = [
-    # categories
-    path('categories/', CategoryListCreateView.as_view(), name='category-list'),
+    # Registration & auth
+    path('register/', RegisterView.as_view(), name='auth-register'),
+    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # returns access + refresh
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Categories
+    path('categories/', CategoryListView.as_view(), name='category-list'),
     path('categories/<int:pk>/', CategoryDetailView.as_view(), name='category-detail'),
 
-    # public posts listing (authenticated only)
-    path('posts/', PostListView.as_view(), name='post-list'),
-    path('posts/latest/', LatestPostsView.as_view(), name='post-latest'),
-    path('posts/<slug:slug>/', PostDetailView.as_view(), name='post-detail'),
+    # Posts + extra actions
+    path('', include(router.urls)),
 
-    # admin dashboard posts (create & list own posts)
-    path('admin/posts/', AdminPostListCreateView.as_view(), name='admin-post-list-create'),
-    path('admin/posts/<slug:slug>/', PostUpdateDestroyView.as_view(), name='admin-post-update-destroy'),
+    # Comments
+    path('posts/<int:post_id>/comments/', CommentListView.as_view(), name='post-comments'),
+    path('posts/<int:post_id>/comments/add/', CommentCreateView.as_view(), name='add-comment'),
 
-    # comments
-    path('posts/<slug:post_slug>/comments/', CommentListView.as_view(), name='comments-list'),
-    path('comments/create/', CommentCreateView.as_view(), name='comments-create'),
-    path('comments/<int:pk>/', CommentDeleteView.as_view(), name='comments-delete'),
-
-    # likes
-    path('posts/<slug:post_slug>/like/', LikeCreateDestroyView.as_view(), name='post-like'),
+    # Likes
+    path('posts/<int:post_id>/like-toggle/', ToggleLikeView.as_view(), name='toggle-like'),
 ]

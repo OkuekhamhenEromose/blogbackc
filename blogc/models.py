@@ -1,69 +1,71 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.utils.text import slugify
+from django.utils import timezone
 
-class Category(models.Model):
-    name = models.CharField(max_length=120, unique=True)
-    slug = models.SlugField(max_length=140, unique=True, blank=True)
+# Extended profile to include blog admin flag and role
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('editor', 'Editor'),
+        ('writer', 'Writer'),
+        ('reader', 'Reader'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    is_blog_admin = models.BooleanField(default=False)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='admin')
 
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
+
+
+class BlogCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True)
 
     def __str__(self):
         return self.name
 
 
-class Post(models.Model):
+class BlogPost(models.Model):
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True)
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
-    title = models.CharField(max_length=250)
-    slug = models.SlugField(max_length=300, unique=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='posts')
+    category = models.ForeignKey(BlogCategory, on_delete=models.SET_NULL, null=True, related_name='posts')
     content = models.TextField()
-    is_published = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
-    # Optionally expose a short excerpt
-    excerpt = models.CharField(max_length=400, blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            base = slugify(self.title)[:200]
-            slug = base
-            i = 1
-            while Post.objects.filter(slug=slug).exists():
-                slug = f"{base}-{i}"
-                i += 1
-            self.slug = slug
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title
 
 
 class Comment(models.Model):
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
-    content = models.TextField(max_length=1000)
-    created_at = models.DateTimeField(auto_now_add=True)
-    # approved flag if you want moderation later
-    approved = models.BooleanField(default=True)
+    body = models.TextField(default="Default body text")
+    active = models.BooleanField(default=True)  # for soft delete
+    created_at = models.DateTimeField(default=timezone.now)
+    active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['created_at']
 
     def __str__(self):
-        return f"Comment by {self.user.username} on {self.post.title}"
+        return f'Comment by {self.user.username} on {self.post.title}'
 
 
 class Like(models.Model):
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='likes')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='likes')
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='likes')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        unique_together = ('user', 'post')
+        unique_together = ('post', 'user')
+
+    def __str__(self):
+        return f'{self.user.username} likes {self.post.title}'
