@@ -1,14 +1,17 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User, Group
-from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
 from django.utils.text import slugify
 from rest_framework.validators import UniqueValidator
-from .models import UserProfile
 
-# Registration serializer
+from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
+
+
+# -------------------
+# Registration Serializer
+# -------------------
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
-    role = serializers.ChoiceField(write_only=True, choices=['admin','user'])
+    role = serializers.ChoiceField(write_only=True, choices=['admin', 'user'])
 
     username = serializers.CharField(
         validators=[UniqueValidator(queryset=User.objects.all())]
@@ -16,7 +19,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('username','password','first_name','last_name','email','role')
+        fields = ('username', 'password', 'first_name', 'last_name', 'email', 'role')
 
     def create(self, validated_data):
         role = validated_data.pop('role')
@@ -25,15 +28,19 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
 
-        # create profile
-        profile = UserProfile.objects.create(user=user, is_blog_admin=(role=='admin'))
+        # Create profile
+        UserProfile.objects.create(user=user, is_blog_admin=(role == 'admin'))
 
-        # assign to groups
+        # Assign to group
         group_name = 'BLOG_ADMIN' if role == 'admin' else 'BLOG_USER'
         group, _ = Group.objects.get_or_create(name=group_name)
         user.groups.add(group)
         return user
 
+
+# -------------------
+# User Serializer
+# -------------------
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(
         choices=UserProfile.ROLE_CHOICES,
@@ -54,18 +61,23 @@ class UserSerializer(serializers.ModelSerializer):
         user = User(**validated_data)
         user.set_password(password)
         user.save()
-        
-        # Create linked profile
+
         UserProfile.objects.create(user=user, role=role, is_blog_admin=(role == 'admin'))
         return user
 
+
+# -------------------
 # Category Serializer
+# -------------------
 class BlogCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = BlogCategory
-        fields = ('id','name','slug')
+        fields = ('id', 'name', 'slug')
 
-# Post serializers
+
+# -------------------
+# Blog Post Serializers
+# -------------------
 class BlogPostListSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
     category = BlogCategorySerializer(read_only=True)
@@ -74,7 +86,11 @@ class BlogPostListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ('id','title','slug','author','category','published','created_at','likes_count','comments_count')
+        fields = (
+            'id', 'title', 'slug', 'author', 'category', 'published',
+            'created_at', 'likes_count', 'comments_count'
+        )
+
 
 class BlogPostDetailSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
@@ -84,11 +100,15 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ('id','title','slug','author','category','content','published','created_at','updated_at','likes_count','comments')
+        fields = (
+            'id', 'title', 'slug', 'author', 'category', 'content',
+            'published', 'created_at', 'updated_at', 'likes_count', 'comments'
+        )
 
     def get_comments(self, obj):
         qs = obj.comments.filter(active=True)
         return CommentSerializer(qs, many=True).data
+
 
 class BlogPostCreateSerializer(serializers.ModelSerializer):
     category_id = serializers.IntegerField(write_only=True, required=False)
@@ -96,7 +116,7 @@ class BlogPostCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ('title','slug','category_id','content','published')
+        fields = ('title', 'slug', 'category_id', 'content', 'published')
 
     def validate(self, data):
         if not data.get('slug'):
@@ -106,29 +126,40 @@ class BlogPostCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         category_id = validated_data.pop('category_id', None)
         request = self.context.get('request')
-        user = request.user
+        user = request.user  # logged-in user
+
+        category = None
         if category_id:
             try:
                 category = BlogCategory.objects.get(pk=category_id)
             except BlogCategory.DoesNotExist:
                 raise serializers.ValidationError({'category_id': 'Invalid category'})
-        else:
-            category = None
-        post = BlogPost.objects.create(author=user, category=category, **validated_data)
-        return post
 
-# Comment
+        return BlogPost.objects.create(
+            category=category,
+            **validated_data
+        )
+
+
+# -------------------
+# Comment Serializer
+# -------------------
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+
     class Meta:
         model = Comment
-        fields = ('id','post','user','body','created_at')
-        read_only_fields = ('id','user','created_at')
+        fields = ('id', 'post', 'user', 'body', 'created_at')
+        read_only_fields = ('id', 'user', 'post', 'created_at')
 
-# Like serializer
+
+# -------------------
+# Like Serializer
+# -------------------
 class LikeSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+
     class Meta:
         model = Like
-        fields = ('id','post','user','created_at')
-        read_only_fields = ('id','user','created_at')
+        fields = ('id', 'post', 'user', 'created_at')
+        read_only_fields = ('id', 'user', 'created_at')
