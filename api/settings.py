@@ -72,7 +72,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-DATABASES['default'] = dj_database_url.parse
+DATABASES['default'] = dj_database_url.parse("postgresql://blogbackc_user:MGMyIaM5blHqNIASKCNCuCrMqoCZx1eV@dpg-d2dkp9buibrs739qfsv0-a.oregon-postgres.render.com/blogbackc")
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
