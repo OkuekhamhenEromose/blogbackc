@@ -4,7 +4,7 @@ from django.utils.text import slugify
 from rest_framework.validators import UniqueValidator
 
 from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
-
+from .utils import SendMail
 
 # -------------------
 # Registration Serializer
@@ -24,6 +24,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop('role')
         password = validated_data.pop('password')
+        email = validated_data.get('email')
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -35,6 +36,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         group_name = 'BLOG_ADMIN' if role == 'admin' else 'BLOG_USER'
         group, _ = Group.objects.get_or_create(name=group_name)
         user.groups.add(group)
+        SendMail(email)
         return user
 
 
