@@ -6,9 +6,7 @@ from django.utils import timezone
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('admin', 'Admin'),
-        ('editor', 'Editor'),
-        ('writer', 'Writer'),
-        ('reader', 'Reader'),
+        ('user', 'User'),
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')

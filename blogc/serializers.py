@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User, Group
 from django.utils.text import slugify
 from rest_framework.validators import UniqueValidator
+from django.contrib.auth import authenticate
 
 from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
 from .utils import SendMail
@@ -11,7 +12,15 @@ from .utils import SendMail
 # -------------------
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
-    role = serializers.ChoiceField(write_only=True, choices=['admin', 'user'])
+    email = serializers.EmailField(required=True)
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    role = serializers.ChoiceField(
+        write_only=True,
+        choices=[('admin', 'admin'), ('user', 'user')],
+        default='user',
+        required=False
+    )
 
     username = serializers.CharField(
         validators=[UniqueValidator(queryset=User.objects.all())]
@@ -22,7 +31,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ('username', 'password', 'first_name', 'last_name', 'email', 'role')
 
     def create(self, validated_data):
-        role = validated_data.pop('role')
+        role = validated_data.pop('role','user')
         password = validated_data.pop('password')
         email = validated_data.get('email')
         user = User(**validated_data)
@@ -30,7 +39,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
 
         # Create profile
-        UserProfile.objects.create(user=user, is_blog_admin=(role == 'admin'))
+        UserProfile.objects.create(
+            user=user,
+            role=role,
+            is_blog_admin=(role == 'admin')
+        )
 
         # Assign to group
         group_name = 'BLOG_ADMIN' if role == 'admin' else 'BLOG_USER'
@@ -38,8 +51,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.groups.add(group)
         SendMail(email)
         return user
-
-
 # -------------------
 # User Serializer
 # -------------------
@@ -64,10 +75,29 @@ class UserSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
 
-        UserProfile.objects.create(user=user, role=role, is_blog_admin=(role == 'admin'))
+        UserProfile.objects.create(user=user, role=role, is_blog_admin=(role == 'admin')) 
         return user
 
+# Add to serializers.py
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
 
+    def validate(self, data):
+        email = data.get('email')
+        password = data.get('password')
+        
+        if email and password:
+            user = authenticate(request=self.context.get('request'),
+                              email=email, password=password)
+            if not user:
+                raise serializers.ValidationError("Unable to log in with provided credentials.")
+        else:
+            raise serializers.ValidationError("Must include 'email' and 'password'.")
+            
+        data['user'] = user
+        return data
+    
 # -------------------
 # Category Serializer
 # -------------------

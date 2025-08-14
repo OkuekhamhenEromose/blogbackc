@@ -5,7 +5,9 @@ class IsBlogAdmin(permissions.BasePermission):
     Allows access only to users who are blog admins (profile.is_blog_admin True).
     """
     def has_permission(self, request, view):
-        return bool(request.user and getattr(request.user, 'profile', None) and request.user.profile.is_blog_admin)
+        prof = getattr(request.user, 'profile', None) or getattr(request.user, 'userprofile', None)
+        return bool(request.user and prof and getattr(prof, 'is_blog_admin', False))
+
 
 class IsAuthorOrReadOnly(permissions.BasePermission):
     """

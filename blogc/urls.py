@@ -1,13 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    RegisterView, PostViewSet, CategoryListView, CategoryDetailView,
+    RegisterView, PublicTokenObtainPairView, PublicTokenRefreshView, PostViewSet, CategoryListView, CategoryDetailView,
     CommentCreateView, CommentListView, ToggleLikeView
 )
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
+
 
 router = DefaultRouter()
 router.register(r'posts', PostViewSet, basename='post')
@@ -15,9 +12,8 @@ router.register(r'posts', PostViewSet, basename='post')
 urlpatterns = [
     # Registration & auth
     path('register/', RegisterView.as_view(), name='auth-register'),
-    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # returns access + refresh
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
+    path('login/', PublicTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', PublicTokenRefreshView.as_view(), name='token_refresh'),
     # Categories
     path('categories/', CategoryListView.as_view(), name='category-list'),
     path('categories/<int:pk>/', CategoryDetailView.as_view(), name='category-detail'),

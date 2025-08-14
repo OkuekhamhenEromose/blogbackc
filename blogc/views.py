@@ -3,11 +3,15 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
-from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth import authenticate
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
 
 from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
 from .serializers import (
@@ -22,8 +26,44 @@ from .permissions import IsBlogAdmin, IsAuthorOrReadOnly
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
-    permission_classes = []  # Anyone can register
+    permission_classes = [AllowAny]  # Anyone can register
     authentication_classes = []
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Use your custom authentication backend
+        authenticate_kwargs = {
+            'email': attrs[self.username_field],
+            'password': attrs['password'],
+        }
+        try:
+            authenticate_kwargs['request'] = self.context['request']
+        except KeyError:
+            pass
+
+        self.user = authenticate(**authenticate_kwargs)
+
+        if self.user is None or not self.user.is_active:
+            raise serializers.ValidationError(
+                self.error_messages['no_active_account'],
+                code='no_active_account',
+            )
+
+        data = {}
+        refresh = self.get_token(self.user)
+
+        data['refresh'] = str(refresh)
+        data['access'] = str(refresh.access_token)
+
+        # Add extra responses here
+        data['user'] = UserSerializer(self.user).data
+        return data
+
+class PublicTokenObtainPairView(TokenObtainPairView):
+    permission_classes = [AllowAny]
+
+class PublicTokenRefreshView(TokenRefreshView):
+    permission_classes = [AllowAny]
 
 
 # ----------------- Categories -----------------

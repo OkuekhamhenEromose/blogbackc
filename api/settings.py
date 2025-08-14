@@ -65,16 +65,24 @@ WSGI_APPLICATION = 'api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database
+if DEBUG:
+    # Local SQLite database
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-DATABASES['default'] = dj_database_url.parse(str(os.getenv('DATABASE_URL')))
-
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+else:
+    # Production: PostgreSQL on Render
+    DATABASES = {
+        'default': dj_database_url.parse(
+            os.getenv('DATABASE_URL'),
+            conn_max_age=600,  # Keep connection alive
+            ssl_require=True
+        )
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -91,9 +99,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
+# Add to settings.py
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'blogc.backends.EmailBackend',  # We'll create this
+]
 
 LANGUAGE_CODE = 'en-us'
 
@@ -106,9 +116,17 @@ USE_TZ = True
 CORS_ALLOW_ALL_ORIGINS = True  # ✅ Open for testing
 CORS_ALLOWED_ORIGINS = [
     "https://your-frontend.netlify.app",  # Netlify URL
-    "https://your-custom-domain.com",     # Custom domain if you have one
+    "http://localhost:5173",
+    "http://localhost:3000",
+    # "https://your-custom-domain.com",     # Custom domain if you have one
 ]
+CORS_ALLOW_CREDENTIALS = True
 
+# For production
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 STATIC_URL = 'static/'
 
