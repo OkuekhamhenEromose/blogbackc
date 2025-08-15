@@ -49,7 +49,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         group_name = 'BLOG_ADMIN' if role == 'admin' else 'BLOG_USER'
         group, _ = Group.objects.get_or_create(name=group_name)
         user.groups.add(group)
-        SendMail(email)
+
+        if email:
+            try:
+                SendMail(email)
+            except Exception as e:
+                print(f"Email sending failed: {e}")
+
         return user
 # -------------------
 # User Serializer

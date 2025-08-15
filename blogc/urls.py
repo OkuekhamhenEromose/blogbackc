@@ -1,10 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    RegisterView, PublicTokenObtainPairView, PublicTokenRefreshView, PostViewSet, CategoryListView, CategoryDetailView,
-    CommentCreateView, CommentListView, ToggleLikeView
+    RegisterView, PublicTokenRefreshView, PostViewSet, CategoryListView, CategoryDetailView,
+    CommentCreateView, CommentListView, ToggleLikeView, PublicTokenObtainPairView, 
 )
-
 
 router = DefaultRouter()
 router.register(r'posts', PostViewSet, basename='post')

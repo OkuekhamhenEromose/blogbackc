@@ -100,10 +100,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Add to settings.py
-AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-    'blogc.backends.EmailBackend',  # We'll create this
-]
+# AUTHENTICATION_BACKENDS = [
+#     'blogc.backends.EmailBackend',
+#     'django.contrib.auth.backends.ModelBackend',
+# ]
 
 LANGUAGE_CODE = 'en-us'
 

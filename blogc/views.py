@@ -9,7 +9,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import  TokenRefreshView, TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 
@@ -31,47 +31,45 @@ class RegisterView(generics.CreateAPIView):
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Use your custom authentication backend
-        authenticate_kwargs = {
-            'email': attrs[self.username_field],
-            'password': attrs['password'],
+        email_or_username = attrs.get("email") or attrs.get("username")
+        password = attrs.get("password")
+
+        user = None
+        if email_or_username and password:
+            # Try email first
+            user = authenticate(request=self.context.get('request'),
+                                email=email_or_username, password=password)
+            # If that fails, try username
+            if not user:
+                user = authenticate(request=self.context.get('request'),
+                                    username=email_or_username, password=password)
+
+        if not user:
+            raise serializers.ValidationError(self.error_messages['no_active_account'], code='no_active_account')
+
+        refresh = self.get_token(user)
+        return {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user).data
         }
-        try:
-            authenticate_kwargs['request'] = self.context['request']
-        except KeyError:
-            pass
 
-        self.user = authenticate(**authenticate_kwargs)
-
-        if self.user is None or not self.user.is_active:
-            raise serializers.ValidationError(
-                self.error_messages['no_active_account'],
-                code='no_active_account',
-            )
-
-        data = {}
-        refresh = self.get_token(self.user)
-
-        data['refresh'] = str(refresh)
-        data['access'] = str(refresh.access_token)
-
-        # Add extra responses here
-        data['user'] = UserSerializer(self.user).data
-        return data
 
 class PublicTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
+    serializer_class = MyTokenObtainPairSerializer
 
 class PublicTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
 
 
-# ----------------- Categories -----------------
 class CategoryListView(generics.ListCreateAPIView):
     queryset = BlogCategory.objects.all()
     serializer_class = BlogCategorySerializer
-    permission_classes = [IsAuthenticated, IsBlogAdmin]
-
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]   # Public GET
+        return [IsAuthenticated(), IsBlogAdmin()]
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BlogCategory.objects.all()
@@ -81,6 +79,7 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 # ----------------- Blog Posts -----------------
 @method_decorator(csrf_exempt, name='dispatch')
+
 class PostViewSet(viewsets.ModelViewSet):
     queryset = BlogPost.objects.select_related('author', 'category').all()
     filter_backends = [SearchFilter, OrderingFilter]
@@ -88,9 +87,14 @@ class PostViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'updated_at']
 
     def get_permissions(self):
-        permission_classes = [IsAuthenticated]
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            permission_classes.append(IsAuthorOrReadOnly)
+        # Public endpoints
+        if self.action in ['list', 'retrieve', 'latest']:
+            permission_classes = [AllowAny]
+        # Auth required for create/update/delete
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+            permission_classes = [IsAuthenticated, IsAuthorOrReadOnly]
+        else:
+            permission_classes = [IsAuthenticated]
         return [p() for p in permission_classes]
 
     def get_serializer_class(self):
@@ -114,7 +118,6 @@ class PostViewSet(viewsets.ModelViewSet):
         qs = BlogPost.objects.filter(author=request.user).order_by('-created_at')
         serializer = BlogPostListSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
-
 
 # ----------------- Comments -----------------
 @method_decorator(csrf_exempt, name='dispatch')
