@@ -2,7 +2,8 @@ from django.db import migrations
 from django.utils.text import slugify
 
 def create_default_categories(apps, schema_editor):
-    BlogCategory = apps.get_model('blog', 'BlogCategory')
+    # ✅ Correct app label is "blogc"
+    BlogCategory = apps.get_model('blogc', 'BlogCategory')
 
     default_categories = [
         "Travel",
