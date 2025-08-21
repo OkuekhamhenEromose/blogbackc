@@ -121,13 +121,41 @@ class BlogPostListSerializer(serializers.ModelSerializer):
     category = BlogCategorySerializer(read_only=True)
     likes_count = serializers.IntegerField(source='likes.count', read_only=True)
     comments_count = serializers.IntegerField(source='comments.count', read_only=True)
+    image = serializers.ImageField(use_url=True)
 
     class Meta:
         model = BlogPost
         fields = (
             'id', 'title', 'slug', 'author', 'category', 'published',
-            'created_at', 'likes_count', 'comments_count'
+            'created_at', 'likes_count', 'comments_count', 'image'
         )
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        request = self.context.get('request')
+        if rep.get('image') and request:
+            rep['image'] = request.build_absolute_uri(rep['image'])
+        return rep
+
+# for informations in each category
+class BlogCategoryDetailSerializer(serializers.ModelSerializer):
+    posts = BlogPostListSerializer(many=True, read_only=True)
+    total_posts = serializers.IntegerField(source="posts.count", read_only=True)
+    total_comments = serializers.SerializerMethodField()
+    total_likes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogCategory
+        fields = (
+            "id", "name", "slug",
+            "total_posts", "total_comments", "total_likes",
+            "posts"
+        )
+
+    def get_total_comments(self, obj):
+        return Comment.objects.filter(post__category=obj).count()
+
+    def get_total_likes(self, obj):
+        return Like.objects.filter(post__category=obj).count()
 
 
 class BlogPostDetailSerializer(serializers.ModelSerializer):
@@ -135,50 +163,51 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
     category = BlogCategorySerializer(read_only=True)
     likes_count = serializers.IntegerField(source='likes.count', read_only=True)
     comments = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = BlogPost
         fields = (
-            'id', 'title', 'slug', 'author', 'category', 'content',
+            'id', 'title', 'slug', 'author', 'category', 'content', 'image',
             'published', 'created_at', 'updated_at', 'likes_count', 'comments'
         )
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if obj.image and hasattr(obj.image, "url"):
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return None
 
     def get_comments(self, obj):
         qs = obj.comments.filter(active=True)
         return CommentSerializer(qs, many=True).data
 
-
 class BlogPostCreateSerializer(serializers.ModelSerializer):
-    category_id = serializers.IntegerField(write_only=True, required=False)
-    slug = serializers.SlugField(required=False)
+    category_id = serializers.IntegerField(
+        write_only=True,
+        required=True,
+        min_value=1,
+        help_text="ID of the category"
+    )
+    image = serializers.ImageField(
+        required=False,
+        allow_null=True,
+        max_length=100
+    )
 
     class Meta:
         model = BlogPost
-        fields = ('title', 'slug', 'category_id', 'content', 'published')
+        fields = ('id', 'title', 'content', 'category_id', 'image', 'published')
+        extra_kwargs = {
+            'category': {'read_only': True}
+        }
 
-    def validate(self, data):
-        if not data.get('slug'):
-            data['slug'] = slugify(data['title'])
-        return data
+    def validate_category_id(self, value):
+        if not BlogCategory.objects.filter(pk=value).exists():
+            raise serializers.ValidationError("Category does not exist")
+        return value
 
     def create(self, validated_data):
-        category_id = validated_data.pop('category_id', None)
-        request = self.context.get('request')
-        user = request.user  # logged-in user
-
-        category = None
-        if category_id:
-            try:
-                category = BlogCategory.objects.get(pk=category_id)
-            except BlogCategory.DoesNotExist:
-                raise serializers.ValidationError({'category_id': 'Invalid category'})
-
-        return BlogPost.objects.create(
-            category=category,
-            **validated_data
-        )
-
-
+        return super().create(validated_data)
 # -------------------
 # Comment Serializer
 # -------------------

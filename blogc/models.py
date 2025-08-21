@@ -31,6 +31,7 @@ class BlogPost(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     category = models.ForeignKey(BlogCategory, on_delete=models.SET_NULL, null=True, related_name='posts')
     content = models.TextField()
+    image = models.ImageField(upload_to='post_images/', null=True, blank=True)
     published = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -40,7 +41,6 @@ class BlogPost(models.Model):
 
     def __str__(self):
         return self.title
-
 
 class Comment(models.Model):
     post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='comments')

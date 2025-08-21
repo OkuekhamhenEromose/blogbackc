@@ -1,32 +1,36 @@
 from rest_framework import generics, status, viewsets
+from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.generics import RetrieveAPIView
+from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.views import APIView
-from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
-from rest_framework_simplejwt.views import  TokenRefreshView, TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework import serializers
+from django.views.decorators.csrf import csrf_exempt
+from django.core.exceptions import ValidationError, PermissionDenied
+from django.utils.text import slugify
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 
 from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
 from .serializers import (
     RegisterSerializer, UserSerializer,
     BlogCategorySerializer, BlogPostListSerializer,
     BlogPostDetailSerializer, BlogPostCreateSerializer,
-    CommentSerializer, LikeSerializer
+    CommentSerializer, BlogCategoryDetailSerializer, LikeSerializer
 )
 from .permissions import IsBlogAdmin, IsAuthorOrReadOnly
+from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 # ----------------- Registration -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
-    permission_classes = [AllowAny]  # Anyone can register
+    permission_classes = [AllowAny]
     authentication_classes = []
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -36,16 +40,16 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         user = None
         if email_or_username and password:
-            # Try email first
             user = authenticate(request=self.context.get('request'),
                                 email=email_or_username, password=password)
-            # If that fails, try username
             if not user:
                 user = authenticate(request=self.context.get('request'),
                                     username=email_or_username, password=password)
 
         if not user:
-            raise serializers.ValidationError(self.error_messages['no_active_account'], code='no_active_account')
+            raise serializers.ValidationError(
+                self.error_messages['no_active_account'], code='no_active_account'
+            )
 
         refresh = self.get_token(user)
         return {
@@ -54,7 +58,6 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             'user': UserSerializer(user).data
         }
 
-
 class PublicTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
@@ -62,13 +65,14 @@ class PublicTokenObtainPairView(TokenObtainPairView):
 class PublicTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
 
-
+# ----------------- Categories -----------------
 class CategoryListView(generics.ListCreateAPIView):
     queryset = BlogCategory.objects.all()
     serializer_class = BlogCategorySerializer
+
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [AllowAny()]   # Public GET
+            return [AllowAny()]
         return [IsAuthenticated(), IsBlogAdmin()]
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -76,10 +80,33 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BlogCategorySerializer
     permission_classes = [IsAuthenticated, IsBlogAdmin]
 
+class BlogCategoryViewSet(ReadOnlyModelViewSet):
+    queryset = BlogCategory.objects.all()
+    serializer_class = BlogCategorySerializer
+    permission_classes = [AllowAny]
 
+# from rest_framework.generics import RetrieveAPIView
+# from .serializers import BlogPostDetailSerializer
+# from .permissions import IsBlogAdmin
+
+# class ManagePostView(RetrieveAPIView):
+#     queryset = BlogPost.objects.all()
+#     serializer_class = BlogPostDetailSerializer
+#     permission_classes = [IsAuthenticated, IsBlogAdmin]
+
+#     def get_queryset(self):
+#         # Admins can manage all posts
+#         return BlogPost.objects.all()
+class ManagePostView(RetrieveAPIView):
+    queryset = BlogPost.objects.all()
+    serializer_class = BlogPostDetailSerializer
+    permission_classes = [IsAuthenticated, IsBlogAdmin]
+
+    def get_queryset(self):
+        # Admins can manage all posts
+        return BlogPost.objects.all()
 # ----------------- Blog Posts -----------------
 @method_decorator(csrf_exempt, name='dispatch')
-
 class PostViewSet(viewsets.ModelViewSet):
     queryset = BlogPost.objects.select_related('author', 'category').all()
     filter_backends = [SearchFilter, OrderingFilter]
@@ -87,10 +114,8 @@ class PostViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'updated_at']
 
     def get_permissions(self):
-        # Public endpoints
         if self.action in ['list', 'retrieve', 'latest']:
             permission_classes = [AllowAny]
-        # Auth required for create/update/delete
         elif self.action in ['create', 'update', 'partial_update', 'destroy']:
             permission_classes = [IsAuthenticated, IsAuthorOrReadOnly]
         else:
@@ -105,7 +130,51 @@ class PostViewSet(viewsets.ModelViewSet):
         return BlogPostCreateSerializer
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        title = serializer.validated_data.get('title')
+        base_slug = slugify(title)
+        slug = base_slug
+
+        # Ensure unique slug
+        counter = 1
+        while BlogPost.objects.filter(slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+
+        category_id = self.request.data.get('category_id')
+        category = None
+        if 'category_id' in serializer.validated_data:
+            try:
+                category = BlogCategory.objects.get(pk=category_id)
+            except BlogCategory.DoesNotExist:
+                raise ValidationError({'category_id': 'Invalid category ID'})
+        if not category:
+            raise ValidationError({'category_id': 'This field is required'})
+        serializer.save(
+            author=self.request.user,
+            category=category,
+            slug=slug
+        )
+
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            print("Error creating post:", str(e))
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        serializer = BlogPostListSerializer(qs, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = BlogPostDetailSerializer(instance, context={'request': request})
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='latest')
     def latest(self, request):
@@ -139,7 +208,6 @@ class CommentListView(generics.ListAPIView):
         post_id = self.kwargs['post_id']
         return Comment.objects.filter(post__id=post_id, active=True).order_by('created_at')
 
-
 # ----------------- Likes -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class ToggleLikeView(APIView):
@@ -152,3 +220,36 @@ class ToggleLikeView(APIView):
             return Response({'message': 'liked'}, status=status.HTTP_201_CREATED)
         like.delete()
         return Response({'message': 'unliked'}, status=status.HTTP_200_OK)
+# views.py
+@method_decorator(csrf_exempt, name='dispatch')
+class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticated, IsAuthorOrReadOnly]
+
+    def perform_update(self, serializer):
+        prof = getattr(self.request.user, "profile", None)
+        if self.request.user != serializer.instance.user and not (prof and prof.is_blog_admin):
+            raise PermissionDenied("You do not have permission to edit this comment")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        prof = getattr(self.request.user, "profile", None)
+        if self.request.user != instance.user and not (prof and prof.is_blog_admin):
+            raise PermissionDenied("You do not have permission to delete this comment")
+        instance.delete()
+
+# views.py
+class CategoryDetailView(generics.RetrieveAPIView):
+    queryset = BlogCategory.objects.all()
+    serializer_class = BlogCategoryDetailSerializer
+    permission_classes = [AllowAny]
+
+# views.py
+class CategoryPostsView(generics.ListAPIView):
+    serializer_class = BlogPostListSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        category_id = self.kwargs["pk"]
+        return BlogPost.objects.filter(category_id=category_id, published=True)
