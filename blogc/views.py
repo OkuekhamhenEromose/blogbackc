@@ -1,5 +1,5 @@
-from rest_framework import generics, status, viewsets
-from rest_framework import serializers
+# views.py
+from rest_framework import generics, status, viewsets, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -12,8 +12,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.utils.text import slugify
-from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 
 from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
 from .serializers import (
@@ -26,12 +26,14 @@ from .permissions import IsBlogAdmin, IsAuthorOrReadOnly
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+
 # ----------------- Registration -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
     authentication_classes = []
+
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -58,12 +60,17 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             'user': UserSerializer(user).data
         }
 
+
 class PublicTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]
     serializer_class = MyTokenObtainPairSerializer
+    authentication_classes = []
+
 
 class PublicTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]
+    authentication_classes = []
+
 
 # ----------------- Categories -----------------
 class CategoryListView(generics.ListCreateAPIView):
@@ -75,36 +82,38 @@ class CategoryListView(generics.ListCreateAPIView):
             return [AllowAny()]
         return [IsAuthenticated(), IsBlogAdmin()]
 
-class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+
+# Admin-only Category detail
+class AdminCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BlogCategory.objects.all()
     serializer_class = BlogCategorySerializer
     permission_classes = [IsAuthenticated, IsBlogAdmin]
 
+
+# Public Category detail (read-only)
+class PublicCategoryDetailView(generics.RetrieveAPIView):
+    queryset = BlogCategory.objects.all()
+    serializer_class = BlogCategoryDetailSerializer
+    permission_classes = [AllowAny]
+
+
+# List all categories (readonly)
 class BlogCategoryViewSet(ReadOnlyModelViewSet):
     queryset = BlogCategory.objects.all()
     serializer_class = BlogCategorySerializer
     permission_classes = [AllowAny]
 
-# from rest_framework.generics import RetrieveAPIView
-# from .serializers import BlogPostDetailSerializer
-# from .permissions import IsBlogAdmin
 
-# class ManagePostView(RetrieveAPIView):
-#     queryset = BlogPost.objects.all()
-#     serializer_class = BlogPostDetailSerializer
-#     permission_classes = [IsAuthenticated, IsBlogAdmin]
-
-#     def get_queryset(self):
-#         # Admins can manage all posts
-#         return BlogPost.objects.all()
-class ManagePostView(RetrieveAPIView):
-    queryset = BlogPost.objects.all()
-    serializer_class = BlogPostDetailSerializer
-    permission_classes = [IsAuthenticated, IsBlogAdmin]
+# Public: list posts in a category
+class CategoryPostsView(generics.ListAPIView):
+    serializer_class = BlogPostListSerializer
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
-        # Admins can manage all posts
-        return BlogPost.objects.all()
+        category_id = self.kwargs["pk"]
+        return BlogPost.objects.filter(category_id=category_id, published=True)
+
+
 # ----------------- Blog Posts -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PostViewSet(viewsets.ModelViewSet):
@@ -142,7 +151,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
         category_id = self.request.data.get('category_id')
         category = None
-        if 'category_id' in serializer.validated_data:
+        if category_id:
             try:
                 category = BlogCategory.objects.get(pk=category_id)
             except BlogCategory.DoesNotExist:
@@ -188,6 +197,7 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer = BlogPostListSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
 
+
 # ----------------- Comments -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class CommentCreateView(generics.CreateAPIView):
@@ -199,6 +209,7 @@ class CommentCreateView(generics.CreateAPIView):
         post = get_object_or_404(BlogPost, pk=post_id)
         serializer.save(user=self.request.user, post=post)
 
+
 @method_decorator(csrf_exempt, name='dispatch')
 class CommentListView(generics.ListAPIView):
     serializer_class = CommentSerializer
@@ -208,19 +219,7 @@ class CommentListView(generics.ListAPIView):
         post_id = self.kwargs['post_id']
         return Comment.objects.filter(post__id=post_id, active=True).order_by('created_at')
 
-# ----------------- Likes -----------------
-@method_decorator(csrf_exempt, name='dispatch')
-class ToggleLikeView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request, post_id):
-        post = get_object_or_404(BlogPost, pk=post_id)
-        like, created = Like.objects.get_or_create(post=post, user=request.user)
-        if created:
-            return Response({'message': 'liked'}, status=status.HTTP_201_CREATED)
-        like.delete()
-        return Response({'message': 'unliked'}, status=status.HTTP_200_OK)
-# views.py
 @method_decorator(csrf_exempt, name='dispatch')
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Comment.objects.all()
@@ -239,17 +238,16 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied("You do not have permission to delete this comment")
         instance.delete()
 
-# views.py
-class CategoryDetailView(generics.RetrieveAPIView):
-    queryset = BlogCategory.objects.all()
-    serializer_class = BlogCategoryDetailSerializer
-    permission_classes = [AllowAny]
 
-# views.py
-class CategoryPostsView(generics.ListAPIView):
-    serializer_class = BlogPostListSerializer
-    permission_classes = [AllowAny]
+# ----------------- Likes -----------------
+@method_decorator(csrf_exempt, name='dispatch')
+class ToggleLikeView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        category_id = self.kwargs["pk"]
-        return BlogPost.objects.filter(category_id=category_id, published=True)
+    def post(self, request, post_id):
+        post = get_object_or_404(BlogPost, pk=post_id)
+        like, created = Like.objects.get_or_create(post=post, user=request.user)
+        if created:
+            return Response({'message': 'liked'}, status=status.HTTP_201_CREATED)
+        like.delete()
+        return Response({'message': 'unliked'}, status=status.HTTP_200_OK)

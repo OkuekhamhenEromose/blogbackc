@@ -48,7 +48,6 @@ class Comment(models.Model):
     body = models.TextField(default="Default body text")
     active = models.BooleanField(default=True)  # for soft delete
     created_at = models.DateTimeField(default=timezone.now)
-    active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['created_at']
