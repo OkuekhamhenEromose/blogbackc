@@ -13,7 +13,7 @@ from .views import (
     CommentCreateView,
     CommentDetailView,
     ToggleLikeView,
-    # ManagePostView,
+    S3TestView,
 )
 
 # Router setup (only for posts, not categories to avoid duplication)
@@ -42,4 +42,6 @@ urlpatterns = [
 
     # Likes
     path('posts/<int:post_id>/like-toggle/', ToggleLikeView.as_view(), name='toggle-like'),
+    # for testing display of images
+    path('s3-test/', S3TestView.as_view(), name='s3-test'),
 ]

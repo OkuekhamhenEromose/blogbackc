@@ -118,10 +118,11 @@ if not DEBUG:
 # ---------------- AWS S3 STORAGE ---------------- #
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = "my-blog-media"   # your bucket name
-AWS_S3_REGION_NAME = "eu-west-1"            # your AWS region
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "ch-blog-media")
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "eu-west-1")           # your AWS region
 AWS_QUERYSTRING_AUTH = False                # removes ?signature= URLs
-
+AWS_DEFAULT_ACL = 'public-read'  # CRITICAL: Make files publicly accessible
+AWS_S3_FILE_OVERWRITE = False
 # Public bucket URL
 AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com"
 
@@ -131,7 +132,11 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media (uploaded files go to S3)
 MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/media/"
-DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+DEFAULT_FILE_STORAGE = 'blogc.storage_backends.MediaStorage'
+# Add this to handle file storage properly
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
 
 # ------------------------------------------------ #
 

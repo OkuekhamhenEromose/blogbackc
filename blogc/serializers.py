@@ -121,8 +121,13 @@ class BlogPostListSerializer(serializers.ModelSerializer):
     category = BlogCategorySerializer(read_only=True)
     likes_count = serializers.IntegerField(source='likes.count', read_only=True)
     comments_count = serializers.IntegerField(source='comments.count', read_only=True)
-    image = serializers.ImageField(use_url=True)
-
+    image = serializers.SerializerMethodField()
+    def get_image(self, obj):
+        if obj.image:
+            # For S3, the image URL should already be absolute
+            return obj.image.url
+        return None
+    
     class Meta:
         model = BlogPost
         fields = (
@@ -165,6 +170,10 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
     comments = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
 
+    def get_image(self, obj):
+        if obj.image:
+            return obj.image.url
+        return None
     class Meta:
         model = BlogPost
         fields = (

@@ -25,8 +25,44 @@ from .serializers import (
 from .permissions import IsBlogAdmin, IsAuthorOrReadOnly
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+# for testing for the image display
+from django.http import JsonResponse
+from django.views import View
+import boto3
+from botocore.exceptions import ClientError
+from django.conf import settings
 
-
+class S3TestView(View):
+    def get(self, request):
+        try:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME
+            )
+            
+            # Test listing buckets
+            response = s3.list_buckets()
+            buckets = [bucket['Name'] for bucket in response['Buckets']]
+            
+            # Test if our bucket exists
+            bucket_exists = settings.AWS_STORAGE_BUCKET_NAME in buckets
+            
+            return JsonResponse({
+                'status': 'success',
+                'buckets': buckets,
+                'target_bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                'bucket_exists': bucket_exists,
+                'region': settings.AWS_S3_REGION_NAME
+            })
+            
+        except ClientError as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e),
+                'error_code': e.response['Error']['Code']
+            }, status=500)
 # ----------------- Registration -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
