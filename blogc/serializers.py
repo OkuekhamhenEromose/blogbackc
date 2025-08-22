@@ -124,15 +124,19 @@ class BlogPostListSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     def get_image(self, obj):
         if obj.image:
-            # For S3, the image URL should already be absolute
-            return obj.image.url
+            # If the URL is already absolute (S3), return as is
+            if obj.image.url.startswith('http'):
+                return obj.image.url
+            # Otherwise, build absolute URL for local files
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
     
     class Meta:
         model = BlogPost
         fields = (
             'id', 'title', 'slug', 'author', 'category', 'published',
-            'created_at', 'likes_count', 'comments_count', 'image'
+            'created_at', 'likes_count', 'comments_count', 'content', 'image'
         )
     def to_representation(self, instance):
         rep = super().to_representation(instance)
