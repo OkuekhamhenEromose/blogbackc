@@ -122,28 +122,23 @@ class BlogPostListSerializer(serializers.ModelSerializer):
     likes_count = serializers.IntegerField(source='likes.count', read_only=True)
     comments_count = serializers.IntegerField(source='comments.count', read_only=True)
     image = serializers.SerializerMethodField()
+
     def get_image(self, obj):
         if obj.image:
-            # If the URL is already absolute (S3), return as is
+            # Already absolute (e.g. S3) → return as is
             if obj.image.url.startswith('http'):
                 return obj.image.url
-            # Otherwise, build absolute URL for local files
+            # Otherwise build absolute URI for local files
             request = self.context.get('request')
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
-    
+
     class Meta:
         model = BlogPost
         fields = (
             'id', 'title', 'slug', 'author', 'category', 'published',
             'created_at', 'likes_count', 'comments_count', 'content', 'image'
         )
-    def to_representation(self, instance):
-        rep = super().to_representation(instance)
-        request = self.context.get('request')
-        if rep.get('image') and request:
-            rep['image'] = request.build_absolute_uri(rep['image'])
-        return rep
 
 # for informations in each category
 class BlogCategoryDetailSerializer(serializers.ModelSerializer):
@@ -176,23 +171,21 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         if obj.image:
-            return obj.image.url
-        return None
-    class Meta:
-        model = BlogPost
-        fields = (
-            'id', 'title', 'slug', 'author', 'category', 'content', 'image',
-            'published', 'created_at', 'updated_at', 'likes_count', 'comments'
-        )
-    def get_image(self, obj):
-        request = self.context.get("request")
-        if obj.image and hasattr(obj.image, "url"):
+            if obj.image.url.startswith('http'):
+                return obj.image.url
+            request = self.context.get("request")
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
 
     def get_comments(self, obj):
         qs = obj.comments.filter(active=True)
         return CommentSerializer(qs, many=True).data
+    class Meta:
+        model = BlogPost
+        fields = (
+            'id', 'title', 'slug', 'author', 'category', 'content', 'image',
+            'published', 'created_at', 'updated_at', 'likes_count', 'comments'
+        )
 
 class BlogPostCreateSerializer(serializers.ModelSerializer):
     category_id = serializers.IntegerField(
