@@ -108,9 +108,10 @@ class LoginSerializer(serializers.Serializer):
 # Category Serializer
 # -------------------
 class BlogCategorySerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source="name", read_only=True)
     class Meta:
         model = BlogCategory
-        fields = ('id', 'name', 'slug')
+        fields = ('id', 'title')
 
 
 # -------------------
