@@ -119,7 +119,7 @@ if not DEBUG:
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "ch-blog-media")
-AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "eu-west-1")           # your AWS region
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "eu-north-1")           # your AWS region
 AWS_QUERYSTRING_AUTH = False                # removes ?signature= URLs
 AWS_DEFAULT_ACL = 'public-read'  # CRITICAL: Make files publicly accessible
 AWS_S3_FILE_OVERWRITE = False
