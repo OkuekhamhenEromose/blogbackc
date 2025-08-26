@@ -1,18 +1,28 @@
 from rest_framework import permissions
+from .models import UserProfile
 
 class IsBlogAdmin(permissions.BasePermission):
     """
     Allows access only to users who are blog admins (profile.is_blog_admin True).
     """
     def has_permission(self, request, view):
-        # Support both 'profile' and 'userprofile' in case of naming differences
-        prof = getattr(request.user, 'profile', None) or getattr(request.user, 'userprofile', None)
-        return bool(
-            request.user 
-            and request.user.is_authenticated 
-            and prof 
-            and getattr(prof, 'is_blog_admin', False)
-        )
+        # Check if user is authenticated
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Get profile using the correct related name
+        try:
+            profile = request.user.profile
+            return bool(profile and profile.is_blog_admin)
+        except UserProfile.DoesNotExist:
+            # If profile doesn't exist, try to create it
+            UserProfile.objects.get_or_create(
+                user=request.user, 
+                defaults={'role': 'user', 'is_blog_admin': False}
+            )
+            return False
+        except AttributeError:
+            return False
 
 
 class IsAuthorOrReadOnly(permissions.BasePermission):

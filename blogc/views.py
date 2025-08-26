@@ -31,6 +31,28 @@ from django.views import View
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
+from django.core.files.storage import default_storage
+from .storage_backends import MediaStorage
+
+def debug_storage(request):
+    # Test default storage
+    default_storage_class = str(default_storage.__class__)
+    
+    # Test custom storage
+    try:
+        custom_storage = MediaStorage()
+        custom_storage_class = str(custom_storage.__class__)
+        custom_bucket = getattr(custom_storage, 'bucket_name', 'N/A')
+    except Exception as e:
+        custom_storage_class = f"Error: {e}"
+        custom_bucket = "N/A"
+    
+    return JsonResponse({
+        'settings_default_storage': getattr(settings, 'DEFAULT_FILE_STORAGE', 'NOT SET'),
+        'actual_default_storage': default_storage_class,
+        'custom_storage_class': custom_storage_class,
+        'custom_bucket': custom_bucket,
+    })
 
 class S3TestView(View):
     def get(self, request):
@@ -63,6 +85,23 @@ class S3TestView(View):
                 'message': str(e),
                 'error_code': e.response['Error']['Code']
             }, status=500)
+
+# Add to views.py
+class DebugImageView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        posts = BlogPost.objects.all()
+        data = []
+        for post in posts:
+            data.append({
+                'id': post.id,
+                'title': post.title,
+                'image_url': post.image.url if post.image else None,
+                'image_starts_with_http': post.image.url.startswith('http') if post.image else False,
+                'absolute_url': request.build_absolute_uri(post.image.url) if post.image else None
+            })
+        return Response(data)
 # ----------------- Registration -----------------
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
@@ -79,10 +118,10 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         user = None
         if email_or_username and password:
             user = authenticate(request=self.context.get('request'),
-                                email=email_or_username, password=password)
+            email=email_or_username, password=password)
             if not user:
                 user = authenticate(request=self.context.get('request'),
-                                    username=email_or_username, password=password)
+                username=email_or_username, password=password)
 
         if not user:
             raise serializers.ValidationError(
@@ -110,9 +149,10 @@ class PublicTokenRefreshView(TokenRefreshView):
 
 # ----------------- Categories -----------------
 class CategoryListView(generics.ListCreateAPIView):
-    queryset = BlogCategory.objects.all()
+    def get_queryset(self):
+        return BlogCategory.objects.exclude(name='Test Category')
     serializer_class = BlogCategorySerializer
-
+    
     def get_permissions(self):
         if self.request.method == 'GET':
             return [AllowAny()]
@@ -161,7 +201,9 @@ class PostViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'latest']:
             permission_classes = [AllowAny]
-        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+        elif self.action == 'create':
+            permission_classes = [IsAuthenticated, IsBlogAdmin]
+        elif self.action in ['update', 'partial_update', 'destroy']:
             permission_classes = [IsAuthenticated, IsAuthorOrReadOnly]
         else:
             permission_classes = [IsAuthenticated]
@@ -186,12 +228,7 @@ class PostViewSet(viewsets.ModelViewSet):
             counter += 1
 
         category_id = self.request.data.get('category_id')
-        category = None
-        if category_id:
-            try:
-                category = BlogCategory.objects.get(pk=category_id)
-            except BlogCategory.DoesNotExist:
-                raise ValidationError({'category_id': 'Invalid category ID'})
+        category = BlogCategory.objects.filter(pk=category_id).first()
         if not category:
             raise ValidationError({'category_id': 'This field is required'})
         serializer.save(
@@ -233,21 +270,33 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer = BlogPostListSerializer(qs, many=True, context={'request': request})
         return Response(serializer.data)
 
+class CheckUserPermissionsView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        try:
+            profile = user.profile
+            return Response({
+                'username': user.username,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser,
+                'profile_exists': True,
+                'profile_role': profile.role,
+                'is_blog_admin': profile.is_blog_admin,
+                'has_create_permission': profile.is_blog_admin
+            })
+        except UserProfile.DoesNotExist:
+            return Response({
+                'username': user.username,
+                'profile_exists': False,
+                'has_create_permission': False
+            })
 
 # ----------------- Comments -----------------
+# ADD THIS COMBINED VIEW:
 @method_decorator(csrf_exempt, name='dispatch')
-class CommentCreateView(generics.CreateAPIView):
-    serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
-
-    def perform_create(self, serializer):
-        post_id = self.kwargs['post_id']
-        post = get_object_or_404(BlogPost, pk=post_id)
-        serializer.save(user=self.request.user, post=post)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class CommentListView(generics.ListAPIView):
+class CommentListCreateView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -255,6 +304,10 @@ class CommentListView(generics.ListAPIView):
         post_id = self.kwargs['post_id']
         return Comment.objects.filter(post__id=post_id, active=True).order_by('created_at')
 
+    def perform_create(self, serializer):
+        post_id = self.kwargs['post_id']
+        post = get_object_or_404(BlogPost, pk=post_id)
+        serializer.save(user=self.request.user, post=post)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):

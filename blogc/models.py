@@ -1,6 +1,9 @@
+# models.py - FIXED
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.text import slugify  # Add this import
+from .storage_backends import MediaStorage
 
 # Extended profile to include blog admin flag and role
 class UserProfile(models.Model):
@@ -31,7 +34,7 @@ class BlogPost(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     category = models.ForeignKey(BlogCategory, on_delete=models.SET_NULL, null=True, related_name='posts')
     content = models.TextField()
-    image = models.ImageField(upload_to='post_images/', null=True, blank=True)
+    image = models.ImageField(upload_to='post_images/', storage=MediaStorage(), null=True, blank=True)
     published = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -41,6 +44,18 @@ class BlogPost(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        # FIXED: Proper indentation
+        if not self.slug:
+            self.slug = slugify(self.title)
+            # Ensure unique slug
+            base_slug = self.slug
+            counter = 1
+            while BlogPost.objects.filter(slug=self.slug).exists():
+                self.slug = f"{base_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
 
 class Comment(models.Model):
     post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='comments')

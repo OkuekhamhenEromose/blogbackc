@@ -1,20 +1,18 @@
 import os
-import dj_database_url
 from pathlib import Path
-from dotenv import load_dotenv
+from decouple import config, Csv
 from datetime import timedelta
-
-load_dotenv()
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = str(os.getenv('SECRET_KEY'))
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False').lower() in ['true', '1', 'yes']
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
 # Application definition
 INSTALLED_APPS = [
@@ -80,7 +78,7 @@ else:
     # Production: PostgreSQL on Render
     DATABASES = {
         'default': dj_database_url.parse(
-            os.getenv('DATABASE_URL'),
+            config('DATABASE_URL'),
             conn_max_age=600,  # Keep connection alive
             ssl_require=True
         )
@@ -102,11 +100,7 @@ USE_TZ = True
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True  # Open for dev/testing
-CORS_ALLOWED_ORIGINS = [
-    "https://your-frontend.netlify.app",  # Netlify
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='https://your-frontend.netlify.app,http://localhost:5173,http://localhost:3000', cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
 
 # Security (for production)
@@ -116,23 +110,26 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
 
 # ---------------- AWS S3 STORAGE ---------------- #
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "ch-blog-media")
-AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "eu-north-1")           # your AWS region
-AWS_QUERYSTRING_AUTH = False                # removes ?signature= URLs
-AWS_DEFAULT_ACL = 'public-read'  # CRITICAL: Make files publicly accessible
+DEFAULT_FILE_STORAGE = 'blogc.storage_backends.MediaStorage'
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default='blogbackc')
+AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='eu-north-1')
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = False
 AWS_S3_FILE_OVERWRITE = False
+
 # Public bucket URL
 AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com"
 
 # Static files (only collected locally or served by WhiteNoise)
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media (uploaded files go to S3)
 MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/media/"
-DEFAULT_FILE_STORAGE = 'blogc.storage_backends.MediaStorage'
+
 # Add this to handle file storage properly
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
@@ -145,8 +142,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587
-EMAIL_HOST_USER = str(os.getenv('EMAIL_HOST_USER'))
-EMAIL_HOST_PASSWORD = str(os.getenv('EMAIL_HOST_PASSWORD'))
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 
 # DRF + JWT
 REST_FRAMEWORK = {
