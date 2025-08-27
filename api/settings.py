@@ -71,6 +71,13 @@ DATABASES = {
         ssl_require=not DEBUG
     )
 }
+# Production detection
+IS_RENDER = os.environ.get('RENDER', False)  # Render sets this environment variable
+
+# Use Whitenoise for static files in production
+if not DEBUG:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
