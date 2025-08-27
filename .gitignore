@@ -1,2 +1,3 @@
 fullblog
 .env
+*.env

@@ -10,6 +10,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Use environment variables with fallback values
 SECRET_KEY = config('SECRET_KEY', default='temporary-secret-key-change-in-production')
 DEBUG = config('DEBUG', default=False, cast=bool)
+if not DEBUG:
+    # These security settings automatically activate
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,.onrender.com', cast=Csv())
 
 # Application definition
@@ -91,15 +98,10 @@ USE_TZ = True
 
 # ==================== CORS CONFIGURATION ==================== #
 # CORS settings - FIXED for your React app
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all in development, restricted in production
 
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=DEBUG, cast=bool)
 # Specific allowed origins for production
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:5174",  # Added your specific port
-    "http://localhost:3000",
-    "https://your-production-frontend.com",  # Add your production domain when ready
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://localhost:3000', cast=Csv())
 
 # Also allow the patterns that might be used
 CORS_ALLOWED_ORIGIN_REGEXES = [
