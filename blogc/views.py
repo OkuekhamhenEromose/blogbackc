@@ -148,16 +148,42 @@ class PublicTokenRefreshView(TokenRefreshView):
 
 
 # ----------------- Categories -----------------
-class CategoryListView(generics.ListCreateAPIView):
-    def get_queryset(self):
-        return BlogCategory.objects.exclude(name='Test Category')
-    serializer_class = BlogCategorySerializer
+# class CategoryListView(generics.ListCreateAPIView):
+#     queryset = BlogCategory.objects.all()  # Remove the filter initially
+#     serializer_class = BlogCategorySerializer
     
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [AllowAny()]
-        return [IsAuthenticated(), IsBlogAdmin()]
-
+#     def get_permissions(self):
+#         if self.request.method == 'GET':
+#             return [AllowAny()]
+#         return [IsAuthenticated(), IsBlogAdmin()]
+    
+#     def get_queryset(self):
+#         # Only exclude if the category exists
+#         if BlogCategory.objects.filter(name='Test Category').exists():
+#             return BlogCategory.objects.exclude(name='Test Category')
+#         return BlogCategory.objects.all()
+class CategoryListView(generics.ListCreateAPIView):
+    serializer_class = BlogCategorySerializer
+    permission_classes = [AllowAny]  # Start with simplest permissions
+    
+    def get_queryset(self):
+        try:
+            return BlogCategory.objects.all()
+        except Exception as e:
+            print(f"Database error: {e}")
+            return BlogCategory.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"Error in category list: {str(e)}")
+            return Response(
+                {"error": "Unable to fetch categories", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # Admin-only Category detail
 class AdminCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):

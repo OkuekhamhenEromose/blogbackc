@@ -119,7 +119,6 @@ class LoginSerializer(serializers.Serializer):
 # Category Serializer
 # -------------------
 class BlogCategorySerializer(serializers.ModelSerializer):
-    name = serializers.CharField(read_only=True)
     title = serializers.CharField(source="name", read_only=True)
     class Meta:
         model = BlogCategory
