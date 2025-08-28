@@ -11,12 +11,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='temporary-secret-key-change-in-production')
 DEBUG = config('DEBUG', default=False, cast=bool)
 if not DEBUG:
-    # These security settings automatically activate
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
-    
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,.onrender.com', cast=Csv())
 
 # Application definition
@@ -106,6 +109,8 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:
 # Also allow the patterns that might be used
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",  # Allow any localhost port
+    r"^https://.*\.netlify\.app$",
+    r"^https://.*\.netlify\.com$",
 ]
 
 # Allow credentials (cookies, authorization headers)
@@ -132,6 +137,10 @@ CORS_ALLOW_METHODS = [
     'POST',
     'PUT',
 ]
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', 
+    default='http://localhost:5173,http://localhost:5174,https://willowy-jelly-fcf515.netlify.app,https://blogbackc.onrender.com',
+    cast=Csv()
+)
 
 # Preflight request caching
 CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
@@ -149,13 +158,6 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # CSRF trusted origins for form submissions
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:3000',
-    'https://blogbackc.onrender.com',
-    'https://*.onrender.com',
-]
 
 # ==================== AWS S3 STORAGE ==================== #
 # Use default values that won't crash the app if not set
