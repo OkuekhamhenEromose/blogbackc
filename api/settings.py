@@ -138,7 +138,7 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', 
-    default='http://localhost:5173,http://localhost:5174,https://willowy-jelly-fcf515.netlify.app,https://blogbackc.onrender.com',
+    default='http://localhost:5173,http://localhost:5174,https://splendorous-custard-21ddd9.netlify.app,https://blogbackc.onrender.com',
     cast=Csv()
 )
 
