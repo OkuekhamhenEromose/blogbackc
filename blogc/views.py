@@ -329,9 +329,6 @@ class CommentListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         post_id = self.kwargs['post_id']
         return Comment.objects.filter(post__id=post_id, active=True).order_by('created_at')
-    
-    # def get_serializer_context(self):
-    #     return {**super().get_serializer_context(), "request": self.request}
 
     def perform_create(self, serializer):
         post_id = self.kwargs['post_id']
