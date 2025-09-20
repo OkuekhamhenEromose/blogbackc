@@ -5,7 +5,7 @@ from rest_framework.validators import UniqueValidator
 from django.contrib.auth import authenticate
 
 from .models import BlogCategory, BlogPost, Comment, Like, UserProfile
-from .utils import SendMail
+# from .utils import SendMail
 
 
 # -------------------
@@ -56,11 +56,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Update profile role + admin flag
 
         # Send welcome email (optional)
-        if email:
-            try:
-                SendMail(email)
-            except Exception as e:
-                print(f"Email sending failed: {e}")
+        # if email:
+        #     try:
+        #         SendMail(email)
+        #     except Exception as e:
+        #         print(f"Email sending failed: {e}")
         return user
 
 # -------------------
