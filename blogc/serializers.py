@@ -35,23 +35,31 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ("username", "password", "first_name", "last_name", "email", "role")
 
     def create(self, validated_data):
-        role = validated_data.pop("role", "user")
-        password = validated_data.pop("password")
-        email = validated_data.get("email")
+        try:
+            print(f"Registration data: {validated_data}")
+            role = validated_data.pop("role", "user")
+            password = validated_data.pop("password")
+            email = validated_data.get("email")
 
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        
-        profile, created = UserProfile.objects.get_or_create(user=user)
-        profile.role = role
-        profile.is_blog_admin = (role == "admin")
-        profile.save()
+            user = User(**validated_data)
+            user.set_password(password)
+            user.save()
 
-        # Assign to group
-        group_name = "BLOG_ADMIN" if role == "admin" else "BLOG_USER"
-        group, _ = Group.objects.get_or_create(name=group_name)
-        user.groups.add(group)
+            print(f"User created: {user.username}")
+            
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.role = role
+            profile.is_blog_admin = (role == "admin")
+            profile.save()
+
+            print(f"Profile created/updated: {profile}")
+
+            # Assign to group
+            group_name = "BLOG_ADMIN" if role == "admin" else "BLOG_USER"
+            group, _ = Group.objects.get_or_create(name=group_name)
+            user.groups.add(group)
+
+            print(f"Added to group: {group_name}")
 
         # Update profile role + admin flag
 
@@ -61,7 +69,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         #         SendMail(email)
         #     except Exception as e:
         #         print(f"Email sending failed: {e}")
-        return user
+            return user
+        except Exception as e:
+                print(f"Registration failed: {str(e)}")
+                raise
 
 # -------------------
 # User Serializer
